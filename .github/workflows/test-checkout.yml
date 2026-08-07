@@ -1,0 +1,31 @@
+name: test checkout spincast
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Phase
+        required: true
+        default: build-only
+        type: choice
+        options: [build-only, claim-link]
+jobs:
+  test:
+    environment: spincast-production
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: carsonfarmer/spincast
+          ref: spincast/tasks-1.2-5.7-6.6-7.3-7.7
+          persist-credentials: false
+          path: spincast-src
+
+      - run: echo ok
