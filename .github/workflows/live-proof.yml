@@ -8,7 +8,7 @@ on:
         required: true
         default: claim-link
         type: choice
-        options: [claim-link, inspect, publish, delete]
+        options: [build-only, claim-link, inspect, publish, delete]
 
 permissions: {}
 
