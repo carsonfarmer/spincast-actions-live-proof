@@ -17,44 +17,37 @@ jobs:
       contents: read
       id-token: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
+    env:
+      SPINCAST_AUTH_ORIGIN: ${{ vars.SPINCAST_AUTH_ORIGIN }}
+      SPINCAST_CONTROLLER: ${{ vars.SPINCAST_CONTROLLER }}
+      SPINCAST_APP_LABEL: ${{ vars.SPINCAST_APP_LABEL }}
     steps:
       - name: Check out application
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
 
-      - name: Check out Spincast source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: carsonfarmer/spincast
-          ref: spincast/tasks-1.2-5.7-6.6-7.3-7.7
-          persist-credentials: false
-          path: spincast-src
-
       - name: Install Spin
         uses: fermyon/actions/spin/setup@8849a6c41270af8e9f60f371982eddf33b8e35c9
         with:
           version: v4.0.2
 
-      - name: Install Rust
+      - name: Install Cast from public release
         run: |
-          rustup update stable --no-self-update 2>/dev/null || true
-          rustup target add wasm32-wasip2
-
-      - name: Build Cast
-        working-directory: spincast-src
-        run: cargo build --release -p spin-plugin-spincast
-
-      - name: Install Cast on PATH
-        run: |
-          cp spincast-src/target/release/spin-spincast /usr/local/bin/spin-spincast
-          chmod +x /usr/local/bin/spin-spincast
-          spin-spincast --help
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/cast-plugin.json"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -LfsS \
+            https://github.com/carsonfarmer/spincast-plugin/releases/download/v0.2.9/cast-plugin.json \
+            -o "$manifest"
+          printf '92a0d2a3b3e3f141a830733ced5d259427f088b9e3303d4b80014a89e6e09909  %s\n' "$manifest" |
+            sha256sum --check --strict
+          spin plugins install --yes --file "$manifest"
+          spin cast --help >/dev/null
 
       - name: Build complete (build-only phase)
         if: inputs.phase == 'build-only'
-        run: echo "Cast built successfully"
+        run: echo "Cast v0.2.9 installed successfully"
 
       - name: Capture claim and link
         if: inputs.phase == 'claim-link'
@@ -88,20 +81,20 @@ jobs:
           print(json.dumps(safe, sort_keys=True, separators=(',',':')))
           "
           unset SPINCAST_ACCEPTANCE_ID_TOKEN
-          spin-spincast auth actions link
+          spin cast auth actions link
 
       - name: Inspect workload apps
         if: inputs.phase == 'inspect'
         run: |
-          spin-spincast status
-          spin-spincast inspect
+          spin cast status
+          spin cast inspect
 
       - name: Delete workload app
         if: inputs.phase == 'delete'
         run: |
           app_id="${SPINCAST_APP_LABEL:-}"
-          generation="$(spin-spincast status | python3 -c 'import json,sys; print(json.load(sys.stdin)["generation"])')"
-          spin-spincast delete --id "delete-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --expected-generation "$generation" --app-id "$app_id"
+          generation="$(spin cast status | python3 -c 'import json,sys; print(json.load(sys.stdin)["generation"])')"
+          spin cast delete --id "delete-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --expected-generation "$generation" --app-id "$app_id"
 
       - name: Scan for credential residue
         if: always()

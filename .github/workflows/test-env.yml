@@ -1,9 +1,0 @@
-name: test env
-on:
-  workflow_dispatch:
-jobs:
-  test:
-    environment: spincast-production
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo ok
