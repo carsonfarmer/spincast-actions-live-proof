@@ -29,7 +29,7 @@ jobs:
           curl --proto '=https' --proto-redir '=https' --tlsv1.2 -LfsS \
             https://github.com/spinframework/spin/releases/download/v4.0.2/spin-v4.0.2-linux-amd64.tar.gz \
             -o /tmp/spin.tar.gz
-          printf '26e158dd355da68522e64149f22e18bea4085bcca3ff7ec1f119b20f69dc0bf0  /tmp/spin.tar.gz\n' |
+          printf '79523cfc93424d555b3493c7ea07e0fb482e1fd9972f29a83bea0ba7d764bf00  /tmp/spin.tar.gz\n' |
             sha256sum --check --strict
           sudo tar xzf /tmp/spin.tar.gz -C /usr/local/bin spin
           spin --version
