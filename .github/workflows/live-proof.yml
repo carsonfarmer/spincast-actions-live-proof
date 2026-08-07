@@ -43,7 +43,7 @@ jobs:
           curl --proto '=https' --proto-redir '=https' --tlsv1.2 -LfsS \
             https://github.com/carsonfarmer/spincast-plugin/releases/download/v0.2.9/cast-plugin.json \
             -o "$manifest"
-          printf '92a0d2a3b3e3f141a830733ced5d259427f088b9e3303d4b80014a89e6e09909  %s\n' "$manifest" |
+          printf '6517841f05b2915a8ccffd558b65a482d9a19bb5d66a43523822428e9437f52e  %s\n' "$manifest" |
             sha256sum --check --strict
           spin plugins install --yes --file "$manifest"
           spin cast --help >/dev/null
@@ -56,9 +56,6 @@ jobs:
         if: inputs.phase == 'claim-link'
         run: |
           set -euo pipefail
-          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-unset}"
-          echo "REQUEST_TOKEN set: $([[ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] && echo yes || echo no)"
-          echo "REQUEST_TOKEN length: ${#ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
           spin cast auth actions link
 
       - name: Inspect workload apps
