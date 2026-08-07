@@ -1,0 +1,152 @@
+name: task-7.3 live hosted proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Phase
+        required: true
+        default: claim-link
+        type: choice
+        options: [claim-link, inspect, publish, delete]
+
+permissions: {}
+
+jobs:
+  deploy:
+    environment: spincast-production
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SPINCAST_AUTH_ORIGIN: ${{ vars.SPINCAST_AUTH_ORIGIN }}
+      SPINCAST_CONTROLLER: ${{ vars.SPINCAST_CONTROLLER }}
+      SPINCAST_APP_LABEL: ${{ vars.SPINCAST_APP_LABEL }}
+    steps:
+      - name: Check out application
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Check out Spincast source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: carsonfarmer/spincast
+          ref: spincast/tasks-1.2-5.7-6.6-7.3-7.7
+          persist-credentials: false
+          path: spincast-src
+
+      - name: Install Spin
+        uses: fermyon/actions/spin/setup@8849a6c41270af8e9f60f371982eddf33b8e35c9
+        with:
+          version: v4.0.2
+
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup target add wasm32-wasip2
+
+      - name: Build Cast
+        working-directory: spincast-src
+        run: cargo build --release -p spin-plugin-spincast
+
+      - name: Install Cast on PATH
+        run: |
+          cp spincast-src/target/release/spin-spincast /usr/local/bin/spin-spincast
+          chmod +x /usr/local/bin/spin-spincast
+          spin-spincast --help
+
+      - name: Capture claim and link
+        if: inputs.phase == 'claim-link'
+        run: |
+          set -euo pipefail
+          encoded_audience="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["SPINCAST_CONTROLLER"], safe=""))')"
+          separator='?'
+          case "$ACTIONS_ID_TOKEN_REQUEST_URL" in *\?*) separator='&';; esac
+          response="$(curl --proto '=https' --tlsv1.2 -fsS --max-time 5 \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H 'Accept: application/json' \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}${separator}audience=${encoded_audience}")"
+          SPINCAST_ACCEPTANCE_ID_TOKEN="$(jq -er '.value' <<<"$response")"
+          export SPINCAST_ACCEPTANCE_ID_TOKEN
+          unset response encoded_audience separator
+          python3 - <<'PY'
+          import base64, json, os
+
+          token = os.environ.pop("SPINCAST_ACCEPTANCE_ID_TOKEN")
+          header_raw, claims_raw, _ = token.split(".")
+          decode = lambda value: json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
+          header, claims = decode(header_raw), decode(claims_raw)
+          keep = ("iss", "aud", "sub", "repository_id", "repository_owner_id",
+                  "workflow_ref", "environment", "ref", "ref_protected",
+                  "event_name", "runner_environment", "repository_visibility")
+          safe = {
+              "header": {"alg": header["alg"], "kid": header["kid"]},
+              "claim_names": sorted(claims),
+              "claims": {name: claims[name] for name in keep},
+              "lifetime_seconds": claims["exp"] - claims["iat"],
+          }
+          assert safe["header"]["alg"] == "RS256"
+          assert safe["claims"]["iss"] == "https://token.actions.githubusercontent.com"
+          assert safe["claims"]["aud"] == os.environ["SPINCAST_CONTROLLER"]
+          assert safe["claims"]["ref_protected"] == "true"
+          assert safe["claims"]["event_name"] == "workflow_dispatch"
+          assert safe["claims"]["runner_environment"] == "github-hosted"
+          assert 0 < safe["lifetime_seconds"] <= 600
+          print(json.dumps(safe, sort_keys=True, separators=(",", ":")))
+          PY
+          unset SPINCAST_ACCEPTANCE_ID_TOKEN
+          spin-spincast auth actions link \
+            --controller "$SPINCAST_CONTROLLER" \
+            --authorization-origin "$SPINCAST_AUTH_ORIGIN"
+
+      - name: Inspect workload apps
+        if: inputs.phase == 'inspect'
+        run: |
+          spin-spincast status \
+            --controller "$SPINCAST_CONTROLLER" \
+            --authorization-origin "$SPINCAST_AUTH_ORIGIN"
+          spin-spincast inspect \
+            --controller "$SPINCAST_CONTROLLER" \
+            --authorization-origin "$SPINCAST_AUTH_ORIGIN"
+
+      - name: Delete workload app
+        if: inputs.phase == 'delete'
+        run: |
+          app_id="$SPINCAST_APP_LABEL"
+          generation="$(spin-spincast status \
+            --controller "$SPINCAST_CONTROLLER" \
+            --authorization-origin "$SPINCAST_AUTH_ORIGIN" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["generation"])')"
+          spin-spincast delete \
+            --controller "$SPINCAST_CONTROLLER" \
+            --authorization-origin "$SPINCAST_AUTH_ORIGIN" \
+            --id "delete-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --expected-generation "$generation" \
+            --app-id "$app_id"
+
+      - name: Scan for credential residue
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, pathlib
+
+          patterns = (
+              re.compile(rb"eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}"),
+              re.compile(rb"gh[pousr]_[A-Za-z0-9]{20,}"),
+              re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              re.compile(rb"Bearer [A-Za-z0-9+/=_-]{8,}"),
+          )
+          for root, dirs, files in os.walk(os.environ.get("RUNNER_TEMP", "/tmp")):
+              for name in files:
+                  path = os.path.join(root, name)
+                  try: data = pathlib.Path(path).read_bytes()
+                  except Exception: continue
+                  for pattern in patterns:
+                      if pattern.search(data):
+                          raise SystemExit(f"forbidden credential-shaped residue in {path}")
+          print("no credential residue found")
+          PY
