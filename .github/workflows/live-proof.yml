@@ -18,10 +18,6 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      SPINCAST_AUTH_ORIGIN: ${{ vars.SPINCAST_AUTH_ORIGIN }}
-      SPINCAST_CONTROLLER: ${{ vars.SPINCAST_CONTROLLER }}
-      SPINCAST_APP_LABEL: ${{ vars.SPINCAST_APP_LABEL }}
     steps:
       - name: Check out application
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
