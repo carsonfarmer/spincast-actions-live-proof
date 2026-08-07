@@ -1,0 +1,22 @@
+name: test spin action
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Phase
+        required: true
+        default: build-only
+        type: choice
+        options: [build-only, claim-link, inspect, delete]
+jobs:
+  deploy:
+    environment: spincast-production
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: fermyon/actions/spin/setup@8849a6c41270af8e9f60f371982eddf33b8e35c9
+        with:
+          version: v4.0.2
+      - run: spin --version
