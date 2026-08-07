@@ -25,13 +25,17 @@ jobs:
           persist-credentials: false
 
       - name: Install Spin
-        uses: fermyon/actions/spin/setup@8849a6c41270af8e9f60f371982eddf33b8e35c9
-        with:
-          version: v4.0.2
+        run: |
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -LfsS \
+            https://github.com/spinframework/spin/releases/download/v4.0.2/spin-v4.0.2-linux-amd64.tar.gz \
+            -o /tmp/spin.tar.gz
+          printf '26e158dd355da68522e64149f22e18bea4085bcca3ff7ec1f119b20f69dc0bf0  /tmp/spin.tar.gz\n' |
+            sha256sum --check --strict
+          sudo tar xzf /tmp/spin.tar.gz -C /usr/local/bin spin
+          spin --version
 
       - name: Install Cast from public release
         run: |
-          set -euo pipefail
           manifest="$RUNNER_TEMP/cast-plugin.json"
           curl --proto '=https' --proto-redir '=https' --tlsv1.2 -LfsS \
             https://github.com/carsonfarmer/spincast-plugin/releases/download/v0.2.9/cast-plugin.json \
@@ -43,7 +47,7 @@ jobs:
 
       - name: Build complete (build-only phase)
         if: inputs.phase == 'build-only'
-        run: echo "Cast v0.2.9 installed successfully"
+        run: echo "Spin and Cast installed successfully"
 
       - name: Capture claim and link
         if: inputs.phase == 'claim-link'
