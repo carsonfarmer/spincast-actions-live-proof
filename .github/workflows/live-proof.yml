@@ -56,34 +56,6 @@ jobs:
         if: inputs.phase == 'claim-link'
         run: |
           set -euo pipefail
-          encoded_audience="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["SPINCAST_CONTROLLER"], safe=""))')"
-          separator='?'
-          case "$ACTIONS_ID_TOKEN_REQUEST_URL" in *\?*) separator='&';; esac
-          response="$(curl --proto '=https' --tlsv1.2 -fsS --max-time 5 \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            -H 'Accept: application/json' \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}${separator}audience=${encoded_audience}")"
-          SPINCAST_ACCEPTANCE_ID_TOKEN="$(jq -er '.value' <<<"$response")"
-          export SPINCAST_ACCEPTANCE_ID_TOKEN
-          unset response encoded_audience separator
-          python3 -c "
-          import base64, json, os
-          token = os.environ.pop('SPINCAST_ACCEPTANCE_ID_TOKEN')
-          header_raw, claims_raw, _ = token.split('.')
-          decode = lambda value: json.loads(base64.urlsafe_b64decode(value + '=' * (-len(value) % 4)))
-          header, claims = decode(header_raw), decode(claims_raw)
-          keep = ('iss','aud','sub','repository_id','repository_owner_id','workflow_ref','environment','ref','ref_protected','event_name','runner_environment','repository_visibility')
-          safe = {'header':{'alg':header['alg'],'kid':header['kid']},'claim_names':sorted(claims),'claims':{name:claims[name] for name in keep},'lifetime_seconds':claims['exp']-claims['iat']}
-          assert safe['header']['alg'] == 'RS256'
-          assert safe['claims']['iss'] == 'https://token.actions.githubusercontent.com'
-          assert safe['claims']['aud'] == os.environ['SPINCAST_CONTROLLER']
-          assert safe['claims']['ref_protected'] == 'true'
-          assert safe['claims']['event_name'] == 'workflow_dispatch'
-          assert safe['claims']['runner_environment'] == 'github-hosted'
-          assert 0 < safe['lifetime_seconds'] <= 600
-          print(json.dumps(safe, sort_keys=True, separators=(',',':')))
-          "
-          unset SPINCAST_ACCEPTANCE_ID_TOKEN
           spin cast auth actions link
 
       - name: Inspect workload apps
