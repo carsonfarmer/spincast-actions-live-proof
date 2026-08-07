@@ -56,6 +56,9 @@ jobs:
         if: inputs.phase == 'claim-link'
         run: |
           set -euo pipefail
+          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS:-unset}"
+          echo "REQUEST_TOKEN set: $([[ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] && echo yes || echo no)"
+          echo "REQUEST_TOKEN length: ${#ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
           spin cast auth actions link
 
       - name: Inspect workload apps
